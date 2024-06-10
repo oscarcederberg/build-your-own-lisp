@@ -1,2 +1,2 @@
 main:
-	clang prompt.c -std=c99 -g -Weverything -ledit
+	clang prompt.c mpc.c -std=c99 -g -Wall -ledit

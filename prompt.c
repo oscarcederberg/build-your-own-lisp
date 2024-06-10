@@ -1,45 +1,73 @@
+#include <editline/readline.h>
+#include <editline/history.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef _WIN32
-#include <string.h>
+#include "mpc.h"
 
-static char buffer[2048];
+typedef struct language_t {
+    mpc_parser_t *number;
+    mpc_parser_t *operator;
+    mpc_parser_t *expr;
+    mpc_parser_t *lispy;
+} language_t;
 
-char *
-readline (char * prompt) {
-    fputs (prompt, stdout);
-    fgets (buffer, 2048, stdin);
-    char *copy = malloc (strlen (buffer) + 1);
-    strcpy (copy, buffer);
-    copy[strlen (cpy) - 1] = '\0';
-    return copy;
+bool language_parse (language_t * language, const char * input, mpc_result_t *
+        result) {
+    return mpc_parse ("<stdin>", input, language->lispy, result);
 }
 
-void
-add_history (char * unused) {}
+language_t * language_new (void) {
+    language_t *language = calloc (1, sizeof(language_t));
+    language->number = mpc_new ("number");
+    language->operator = mpc_new ("operator");
+    language->expr = mpc_new ("expr");
+    language->lispy = mpc_new ("lispy");
 
-#else
-#include <editline/readline.h>
-#include <editline/history.h>
-#endif
+    mpca_lang (MPCA_LANG_DEFAULT,
+        "                                                                      \
+            number      :   /-?[0-9]+/ ;                                       \
+            operator    :   '+' | '-' | '*' | '/' ;                            \
+            expr        :   <number> |  '(' <operator> <expr>+ ')' ;           \
+            lispy       :   /^/ <operator> <expr>+ /$/ ;                       \
+        ",
+        language->number, language->operator, language->expr, language->lispy
+    );
 
-static inline void freep(void *p) {
-        free(*(void**) p);
+    return language;
 }
 
-#define cleanup_free cleanup (freep)
+void language_free (language_t * language) {
+    mpc_cleanup (
+        4, language->number, language->operator, language->expr, language->lispy
+    );
+
+    free (language);
+}
 
 int main (int argc, char ** argv) {
     puts ("Lispy Version 0.0.1");
     puts ("Press CTRL+C to Exit\n");
 
+    language_t *language = language_new ();
+
     while (1) {
-        char *input __attribute__((cleanup_free)) =
-            readline ("lispy> ");
+        char *input = readline ("lispy> ");
+        mpc_result_t result;
+
+        if (language_parse (language, input, &result)) {
+            mpc_ast_print (result.output);
+            mpc_ast_delete (result.output);
+        } else {
+            mpc_err_print (result.error);
+            mpc_err_delete (result.error);
+        }
 
         add_history (input);
+        free (input);
     }
 
+    language_free (language);
     return 0;
 }
